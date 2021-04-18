@@ -128,6 +128,16 @@ struct scan_field select_idcode = {
 bscan_tunnel_type_t bscan_tunnel_type;
 int bscan_tunnel_ir_width; /* if zero, then tunneling is not present/active */
 
+extern int riscv_tap_vjtag_init(struct jtag_tap *tap);
+extern int vjtag_vir_scan(struct jtag_tap *tap, uint32_t vir);
+/*
+	tcl use_vjtag command are read after examine,
+	however, examine checks dmi register via jtag(and fail,
+	because we did not route sld_hub to sld_node)
+	so for now, we enable this by hard coding
+*/
+bool use_vjtag = 1;
+
 static const uint8_t bscan_zero[4] = {0};
 static const uint8_t bscan_one[4] = {1};
 
@@ -381,15 +391,21 @@ static uint32_t dtmcontrol_scan(struct target *target, uint32_t out)
 
 	buf_set_u32(out_value, 0, 32, out);
 
-	jtag_add_ir_scan(target->tap, &select_dtmcontrol, TAP_IDLE);
+	if (use_vjtag)
+		vjtag_vir_scan(target->tap, select_dtmcontrol.out_value[0]);
+	else
+		jtag_add_ir_scan(target->tap, &select_dtmcontrol, TAP_IDLE);
 
 	field.num_bits = 32;
 	field.out_value = out_value;
 	field.in_value = in_value;
 	jtag_add_dr_scan(target->tap, 1, &field, TAP_IDLE);
 
-	/* Always return to dbus. */
-	jtag_add_ir_scan(target->tap, &select_dbus, TAP_IDLE);
+	if (use_vjtag)
+		vjtag_vir_scan(target->tap, select_dbus.out_value[0]);
+	else
+		/* Always return to dbus. */
+		jtag_add_ir_scan(target->tap, &select_dbus, TAP_IDLE);
 
 	int retval = jtag_execute_queue();
 	if (retval != ERROR_OK) {
@@ -443,6 +459,8 @@ static int riscv_init_target(struct command_context *cmd_ctx,
 	select_dtmcontrol.num_bits = target->tap->ir_length;
 	select_dbus.num_bits = target->tap->ir_length;
 	select_idcode.num_bits = target->tap->ir_length;
+
+	debug_level = LOG_LVL_DEBUG;
 
 	if (bscan_tunnel_ir_width != 0) {
 		assert(target->tap->ir_length >= 6);
@@ -1062,6 +1080,11 @@ static int riscv_examine(struct target *target)
 	if (target_was_examined(target)) {
 		LOG_DEBUG("Target was already examined.");
 		return ERROR_OK;
+	}
+
+	if (use_vjtag == true) {
+		LOG_DEBUG("use_vjtag is enabled");
+		riscv_tap_vjtag_init(target->tap);
 	}
 
 	/* Don't need to select dbus, since the first thing we do is read dtmcontrol. */

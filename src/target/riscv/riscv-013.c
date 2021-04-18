@@ -32,6 +32,9 @@
 #define DM_DATA1 (DM_DATA0 + 1)
 #define DM_PROGBUF1 (DM_PROGBUF0 + 1)
 
+extern bool use_vjtag;
+extern int vjtag_vir_scan(struct jtag_tap *tap, uint32_t vir);
+
 static int riscv013_on_step_or_resume(struct target *target, bool step);
 static int riscv013_step_or_resume_current_hart(struct target *target,
 		bool step, bool use_hasel);
@@ -422,7 +425,10 @@ static void select_dmi(struct target *target)
 		select_dmi_via_bscan(target);
 		return;
 	}
-	jtag_add_ir_scan(target->tap, &select_dbus, TAP_IDLE);
+	if (use_vjtag)
+		vjtag_vir_scan(target->tap, select_dbus.out_value[0]);
+	else
+		jtag_add_ir_scan(target->tap, &select_dbus, TAP_IDLE);
 }
 
 static uint32_t dtmcontrol_scan(struct target *target, uint32_t out)
@@ -436,7 +442,10 @@ static uint32_t dtmcontrol_scan(struct target *target, uint32_t out)
 
 	buf_set_u32(out_value, 0, 32, out);
 
-	jtag_add_ir_scan(target->tap, &select_dtmcontrol, TAP_IDLE);
+	if (use_vjtag)
+		vjtag_vir_scan(target->tap, select_dtmcontrol.out_value[0]);
+	else
+		jtag_add_ir_scan(target->tap, &select_dtmcontrol, TAP_IDLE);
 
 	field.num_bits = 32;
 	field.out_value = out_value;

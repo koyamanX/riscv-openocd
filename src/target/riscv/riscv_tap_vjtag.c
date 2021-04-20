@@ -300,27 +300,27 @@ int riscv_tap_vjtag_init(struct jtag_tap *tap)
 #endif
 }
 
-int vjtag_vir_scan(struct jtag_tap *tap, uint32_t vir)
+int vjtag_vir_scan(struct jtag_tap *tap, uint32_t vir_val)
 {
 	uint8_t t[4] = { 0 };
 	struct scan_field field;
 
-	/* Select VIR */
+	/* Select VIR chain */
 	buf_set_u32(t, 0, tap->ir_length, ALTERA_CYCLONE_CMD_USER1);
 	field.num_bits = tap->ir_length;
 	field.out_value = t;
 	field.in_value = NULL;
 	jtag_add_ir_scan(tap, &field, TAP_IDLE);
 
-	/* Set address of DTMCS to the VJTAG IR */
+	/* Set VIR Value to the VIR of sld_node determined by vjtag_node_address */
 	int dr_length = guess_addr_width(nb_nodes) + m_width;
-	buf_set_u32(t, 0, dr_length, (vjtag_node_address << m_width) | vir);
+	buf_set_u32(t, 0, dr_length, (vjtag_node_address << m_width) | vir_val);
 	field.num_bits = dr_length;
 	field.out_value = t;
 	field.in_value = NULL;
 	jtag_add_dr_scan(tap, 1, &field, TAP_IDLE);
 
-	/* Select the VJTAG DR */
+	/* Select the VJTAG DR chain */
 	buf_set_u32(t, 0, tap->ir_length, ALTERA_CYCLONE_CMD_USER0);
 	field.num_bits = tap->ir_length;
 	field.out_value = t;
